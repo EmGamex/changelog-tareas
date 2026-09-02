@@ -43,6 +43,8 @@ El archivo de pruebas principal se ubica en [tests/test_tarea.py](../../tests/te
 | `test_serializacion_y_deserializacion_diccionario` | Conversión bidireccional entre `Tarea` y diccionarios JSON. |
 | `test_auditoria_de_cambios` | Detección de modificaciones en título, fecha límite y etiquetas. |
 | `test_generador_changelog_integracion` | Ensamblado del markdown final del changelog con secciones `>`. |
+| `test_generador_changelog_sin_cambios` | Mensaje estándar de cierre cuando no existen cambios respecto a ayer. |
+| `test_generador_changelog_autocompletado_inactividad_sin_mutacion` | Autocompletado de tareas vencidas sin mutar el objeto en memoria. |
 | `test_preparar_datos_imagen` | Filtrado de tareas cerradas/ignoradas y orden cronológico para JPEG. |
 
 ---
@@ -70,7 +72,7 @@ def test_nueva_regla_personalizada(self):
 
 ### Buenas Prácticas al Escribir Pruebas:
 1. **Sin dependencias de red:** Las pruebas unitarias no deben invocar la API de ClickUp real ni depender de variables de entorno como `CLICKUP_API_TOKEN`.
-2. **Fechas deterministas:** Al probar cálculos de fechas relativas o vencimientos, proporcione explícitamente el parámetro `hoy_date` (por ejemplo, `hoy_date=date(2026, 8, 22)`).
+2. **Fechas deterministas:** Al probar cálculos de fechas relativas o vencimientos, proporcione explícitamente el parámetro `hoy_date` (por ejemplo, `hoy_date=date(2026, 8, 22)`) o `fecha_referencia` en `generar_texto_changelog`.
 3. **Docstrings claros:** Cada método de prueba debe incluir un docstring explicativo en español.
 
 ---

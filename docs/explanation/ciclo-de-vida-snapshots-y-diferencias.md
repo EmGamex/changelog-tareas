@@ -57,7 +57,7 @@ Si un identificador de tarea existía en `tareas_ayer` pero ya no se encuentra e
 ### C. Autocompletado por Inactividad (Tareas Vencidas)
 Si una tarea no tiene un estado de finalización pero su fecha límite (`due_date`) es estrictamente anterior a la fecha de hoy, el sistema reclasifica su estado a completado por inactividad:
 ```text
-• Se completo la tarea Nombre de Tarea (Materia) por inactividad
+• *Nombre de Tarea* (Materia) se completó por inactividad.
 ```
 
 ### D. Tareas Creadas y Completadas en el Mismo Día

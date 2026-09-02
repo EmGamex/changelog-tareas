@@ -36,6 +36,7 @@ Encapsula la entidad fundamental `Tarea`, centralizando las reglas de negocio, c
 ### Constantes:
 - `ESTADOS_COMPLETADOS: List[str]`: `["closed", "complete", "entregada", "hecha"]`
 - `ETIQUETAS_IGNORADAS: List[str]`: `["personal"]`
+- `DIAS_SEMANA_ESPANOL: List[str]`: `["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]`
 
 ### Clase `Tarea`:
 - **Atributos:**
@@ -144,15 +145,20 @@ Cliente HTTP asíncrono enfocado exclusivamente en la consulta concurrente, pagi
 
 Implementa la lógica de negocio para comparar los estados de ayer y hoy y producir el changelog en Markdown basándose en la entidad `Tarea`.
 
+### Alias de Tipos:
+- `TareaEntrada = Union[Tarea, Mapping[str, Any]]`: Representa una tarea como instancia u objeto diccionario.
+- `MapaTareas = Mapping[str, TareaEntrada]`: Mapeo indexado por identificador de tarea.
+
 ### Funciones:
-- `generar_texto_changelog(tareas_ayer: Mapping[str, Union[Tarea, Mapping[str, Any]]], tareas_hoy: Mapping[str, Union[Tarea, Mapping[str, Any]]]) -> str`:
-  - Función orquestadora del changelog. Evalúa tareas archivadas, nuevas, autocompletadas por inactividad y actualizaciones.
+- `generar_texto_changelog(tareas_ayer: Optional[MapaTareas], tareas_hoy: Optional[MapaTareas], fecha_referencia: Optional[datetime] = None) -> str`:
+  - Función orquestadora del changelog. Evalúa tareas archivadas, nuevas, autocompletadas por inactividad y actualizaciones. Admite el parámetro `fecha_referencia` para pruebas deterministas.
 - `construir_texto_final(dia_semana: str, fecha_encabezado: str, completadas: List[str], nuevas: List[str], actualizaciones: List[str]) -> str`:
   - Ensambla las secciones formateadas en Markdown con bloques de sección (`>`).
-- `tiene_etiqueta_ignorada(tarea: Optional[Union[Tarea, Mapping[str, Any]]]) -> bool`: Helper público para evaluar etiquetas excluidas.
+- `tiene_etiqueta_ignorada(tarea: Optional[TareaEntrada]) -> bool`: Helper público para evaluar etiquetas excluidas.
 - `obtener_fecha_visual(raw_date: Any, hoy_date: date) -> str`: Transforma fechas crudas a fechas naturales.
-- `es_tarea_nueva(t_hoy: Union[Tarea, Mapping[str, Any]], hoy_date: date) -> bool`: Helper para verificar creación en el día.
+- `es_tarea_nueva(t_hoy: TareaEntrada, hoy_date: date) -> bool`: Helper para verificar creación en el día.
 - `_buscar_tareas_archivadas(tareas_ayer: Dict[str, Tarea], tareas_hoy: Dict[str, Tarea]) -> List[str]`: Detecta tareas que desaparecieron del snapshot actual.
+- `_clasificar_evento_tarea(t_hoy: Tarea, t_ayer: Optional[Tarea], hoy_date: date) -> Tuple[Optional[str], Optional[str]]`: Evalúa una tarea individual clasificándola en completada, nueva o actualizada sin generar efectos secundarios en sus atributos.
 - `_generar_texto_tarea_nueva(t_hoy: Tarea, hoy_date: date) -> str`: Genera el fragmento Markdown para altas de tareas.
 
 ---
