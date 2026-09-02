@@ -15,15 +15,28 @@ venv.bak/
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.tox/
+
+# Compilación y empaquetado (PyInstaller / Setuptools)
+build/
+dist/
+*.manifest
+*.spec.bak
+*.egg-info/
+*.egg
+*.whl
 
 # Archivos de datos generados en runtime
 clickup_snapshot_*.json
 Tareas_ClickUp.jpg
+*.log
 
 # Archivos de configuración de editores / IDEs
 .vscode/

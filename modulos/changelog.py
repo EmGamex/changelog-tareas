@@ -5,17 +5,21 @@ tareas completadas, nuevas asignaciones y modificaciones de campos.
 """
 
 from datetime import datetime, date
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from modulos.tarea import (
     Tarea,
     ESTADOS_COMPLETADOS,
     ETIQUETAS_IGNORADAS,
+    DIAS_SEMANA_ESPANOL,
     auditar_cambios,
 )
 
+TareaEntrada = Union[Tarea, Mapping[str, Any]]
+MapaTareas = Mapping[str, TareaEntrada]
 
-def _normalizar_a_tarea(id_tarea: str, item: Union[Tarea, Mapping[str, Any]]) -> Tarea:
+
+def _normalizar_a_tarea(id_tarea: str, item: TareaEntrada) -> Tarea:
     """Convierte un diccionario o instancia existente a un objeto Tarea.
 
     Args:
@@ -30,9 +34,7 @@ def _normalizar_a_tarea(id_tarea: str, item: Union[Tarea, Mapping[str, Any]]) ->
     return Tarea.desde_diccionario(id_tarea, dict(item))
 
 
-def _normalizar_mapa_tareas(
-    tareas: Mapping[str, Union[Tarea, Mapping[str, Any]]]
-) -> Dict[str, Tarea]:
+def _normalizar_mapa_tareas(tareas: Optional[MapaTareas]) -> Dict[str, Tarea]:
     """Normaliza un mapeo de tareas (que pueden ser dicts o Tareas) a un diccionario {id: Tarea}.
 
     Args:
@@ -47,7 +49,7 @@ def _normalizar_mapa_tareas(
     }
 
 
-def tiene_etiqueta_ignorada(tarea: Optional[Union[Tarea, Mapping[str, Any]]]) -> bool:
+def tiene_etiqueta_ignorada(tarea: Optional[TareaEntrada]) -> bool:
     """Verifica si una tarea contiene alguna etiqueta que deba ser ignorada (e.g. 'personal').
 
     Args:
@@ -77,7 +79,7 @@ def obtener_fecha_visual(raw_date: Any, hoy_date: date) -> str:
     return tarea_temp.fecha_visual(hoy_date)
 
 
-def es_tarea_nueva(t_hoy: Union[Tarea, Mapping[str, Any]], hoy_date: date) -> bool:
+def es_tarea_nueva(t_hoy: TareaEntrada, hoy_date: date) -> bool:
     """Verifica de forma segura si una tarea fue creada el día de hoy.
 
     Args:
@@ -114,9 +116,7 @@ def _buscar_tareas_archivadas(
             continue
         if task_id not in tareas_hoy:
             if t_ayer.status not in ESTADOS_COMPLETADOS:
-                completadas.append(f"• *{t_ayer.name}* ({t_ayer.materia}) se completó (archivada/cerrada).\n")
-        elif tareas_hoy[task_id].tiene_etiqueta_ignorada():
-            continue
+                completadas.append(f"• *{t_ayer.name}* ({t_ayer.materia}) se completó (archivada/cerrada).")
     return completadas
 
 
@@ -134,7 +134,47 @@ def _generar_texto_tarea_nueva(t_hoy: Tarea, hoy_date: date) -> str:
     fecha_visual = t_hoy.fecha_visual(hoy_date)
     fecha_part = f" y fecha límite para el *{fecha_visual}*" if t_hoy.due_date else " (sin fecha límite)"
 
-    return f"• *{t_hoy.name}* ({t_hoy.materia}) se agregó a la lista{tag_part}{fecha_part}.\n"
+    return f"• *{t_hoy.name}* ({t_hoy.materia}) se agregó a la lista{tag_part}{fecha_part}."
+
+
+def _clasificar_evento_tarea(
+    t_hoy: Tarea,
+    t_ayer: Optional[Tarea],
+    hoy_date: date
+) -> Tuple[Optional[str], Optional[str]]:
+    """Determina la categoría y el texto descriptivo de cambio para una tarea presente hoy.
+
+    Args:
+        t_hoy: Tarea en el estado del snapshot actual.
+        t_ayer: Tarea en el estado del snapshot previo (si existía).
+        hoy_date: Fecha de referencia para cálculos temporales.
+
+    Returns:
+        Tupla (categoria, texto) donde categoria es 'completadas', 'nuevas', 'actualizaciones' o None.
+    """
+    auto_completed = t_hoy.completada_por_inactividad(hoy_date)
+    esta_cerrada = (t_hoy.status in ESTADOS_COMPLETADOS) or auto_completed
+    es_nueva = t_hoy.es_nueva(hoy_date)
+
+    if esta_cerrada:
+        if auto_completed:
+            return "completadas", f"• *{t_hoy.name}* ({t_hoy.materia}) se completó por inactividad."
+        if es_nueva:
+            return "nuevas", f"• *{t_hoy.name}* ({t_hoy.materia}) se creó y completó el día de hoy."
+        if not t_ayer or t_ayer.status not in ESTADOS_COMPLETADOS:
+            return "completadas", f"• *{t_hoy.name}* ({t_hoy.materia}) se completó de la lista."
+        return None, None
+
+    if es_nueva:
+        return "nuevas", _generar_texto_tarea_nueva(t_hoy, hoy_date)
+
+    if t_ayer:
+        cambios = auditar_cambios(t_ayer, t_hoy, hoy_date)
+        if cambios:
+            detalles = ", ".join(cambios)
+            return "actualizaciones", f"• *{t_hoy.name}* ({t_hoy.materia}): {detalles}."
+
+    return None, None
 
 
 def construir_texto_final(
@@ -159,13 +199,15 @@ def construir_texto_final(
     output: List[str] = [f"`Changelog - {dia_semana} ({fecha_encabezado})`"]
     hubo_cambios = False
 
-    for titulo, lista in [
-        ("\n> Tareas completadas", completadas),
+    secciones = [
+        ("> Tareas completadas", completadas),
         ("> Nuevas tareas añadidas", nuevas),
         ("> Actualizaciones y correcciones", actualizaciones),
-    ]:
+    ]
+
+    for titulo, lista in secciones:
         if lista:
-            output.append(titulo)
+            output.append(f"\n{titulo}")
             output.extend(lista)
             hubo_cambios = True
 
@@ -176,23 +218,24 @@ def construir_texto_final(
 
 
 def generar_texto_changelog(
-    tareas_ayer: Mapping[str, Union[Tarea, Mapping[str, Any]]],
-    tareas_hoy: Mapping[str, Union[Tarea, Mapping[str, Any]]]
+    tareas_ayer: Optional[MapaTareas],
+    tareas_hoy: Optional[MapaTareas],
+    fecha_referencia: Optional[datetime] = None
 ) -> str:
     """Orquesta la evaluación del estado de tareas entre ayer y hoy para generar el changelog.
 
     Args:
         tareas_ayer: Mapeo de tareas del día de ayer indexadas por ID.
         tareas_hoy: Mapeo de tareas de hoy indexadas por ID.
+        fecha_referencia: Fecha/hora de referencia opcional para pruebas y determinismo.
 
     Returns:
         Changelog completo en formato Markdown listo para su presentación o envío.
     """
-    hoy = datetime.now()
+    hoy = fecha_referencia if fecha_referencia is not None else datetime.now()
     hoy_date = hoy.date()
 
-    dias_espanol = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    dia_semana = dias_espanol[hoy.weekday()]
+    dia_semana = DIAS_SEMANA_ESPANOL[hoy.weekday()]
     fecha_encabezado = hoy.strftime("%d/%m/%Y")
 
     mapa_ayer = _normalizar_mapa_tareas(tareas_ayer)
@@ -207,29 +250,16 @@ def generar_texto_changelog(
             continue
 
         t_ayer = mapa_ayer.get(task_id)
-        auto_completed = t_hoy.completada_por_inactividad(hoy_date)
-        if auto_completed:
-            t_hoy.status = "complete"
+        categoria, texto = _clasificar_evento_tarea(t_hoy, t_ayer, hoy_date)
 
-        es_nueva = t_hoy.es_nueva(hoy_date)
-
-        if t_hoy.status in ESTADOS_COMPLETADOS:
-            if auto_completed:
-                completadas.append(f"• Se completo la tarea {t_hoy.name} ({t_hoy.materia}) por inactividad\n")
-            elif es_nueva:
-                nuevas.append(f"• *{t_hoy.name}* ({t_hoy.materia}) se creó y completó el día de hoy.\n")
-            elif not t_ayer or t_ayer.status not in ESTADOS_COMPLETADOS:
-                completadas.append(f"• *{t_hoy.name}* ({t_hoy.materia}) se completó de la lista.\n")
+        if not categoria or not texto:
             continue
 
-        if es_nueva:
-            nuevas.append(_generar_texto_tarea_nueva(t_hoy, hoy_date))
-            continue
-
-        if t_ayer:
-            cambios_detectados = auditar_cambios(t_ayer, t_hoy, hoy_date)
-            if cambios_detectados:
-                detalles = ", ".join(cambios_detectados)
-                actualizaciones.append(f"• *{t_hoy.name}* ({t_hoy.materia}): {detalles}.\n")
+        if categoria == "completadas":
+            completadas.append(texto)
+        elif categoria == "nuevas":
+            nuevas.append(texto)
+        elif categoria == "actualizaciones":
+            actualizaciones.append(texto)
 
     return construir_texto_final(dia_semana, fecha_encabezado, completadas, nuevas, actualizaciones)

@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 
 ESTADOS_COMPLETADOS: List[str] = ["closed", "complete", "entregada", "hecha"]
 ETIQUETAS_IGNORADAS: List[str] = ["personal"]
+DIAS_SEMANA_ESPANOL: List[str] = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 
 @dataclass
@@ -163,14 +164,13 @@ class Tarea:
 
             fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
             limite_semana = hoy_date + timedelta(days=7)
-            dias_espanol = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
             if fecha_obj == hoy_date:
                 dia_texto = "Hoy"
             elif fecha_obj == hoy_date + timedelta(days=1):
                 dia_texto = "Mañana"
             elif hoy_date <= fecha_obj <= limite_semana:
-                dia_texto = dias_espanol[fecha_obj.weekday()]
+                dia_texto = DIAS_SEMANA_ESPANOL[fecha_obj.weekday()]
             else:
                 dia_texto = fecha_obj.strftime("%d/%m/%Y")
 

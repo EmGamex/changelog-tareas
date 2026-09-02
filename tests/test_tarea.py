@@ -151,7 +151,7 @@ class TestModuloTarea(unittest.TestCase):
 
     def test_generador_changelog_integracion(self):
         """Verifica la generación del texto markdown del changelog."""
-        hoy = date(2026, 8, 22)
+        fecha_ref = datetime(2026, 8, 22, 10, 0)
         ayer_dict = {
             "1": {
                 "name": "Tarea Activa",
@@ -192,12 +192,44 @@ class TestModuloTarea(unittest.TestCase):
                 "date_created": "20/08/2026",
             }
         }
-        changelog = generar_texto_changelog(ayer_dict, hoy_dict)
-        self.assertIn("`Changelog -", changelog)
+        changelog = generar_texto_changelog(ayer_dict, hoy_dict, fecha_referencia=fecha_ref)
+        self.assertIn("`Changelog - Sábado (22/08/2026)`", changelog)
         self.assertIn("> Tareas completadas", changelog)
-        self.assertIn("Tarea a Completar", changelog)
+        self.assertIn("• *Tarea a Completar* (Física fundamental) se completó de la lista.", changelog)
         self.assertIn("> Actualizaciones y correcciones", changelog)
         self.assertIn("Tarea Activa Modificada", changelog)
+
+    def test_generador_changelog_sin_cambios(self):
+        """Verifica el mensaje estándar cuando no hay novedades respecto al día anterior."""
+        fecha_ref = datetime(2026, 8, 22, 10, 0)
+        tareas = {
+            "1": {
+                "name": "Tarea Sin Cambios",
+                "materia": "Historia",
+                "status": "to do",
+                "tags": "",
+                "due_date": "28/08/2026",
+                "content": "",
+                "date_created": "20/08/2026",
+            }
+        }
+        changelog = generar_texto_changelog(tareas, tareas, fecha_referencia=fecha_ref)
+        self.assertIn("• Sin novedades ni cambios en las tareas respecto al día anterior. Que milagro.", changelog)
+
+    def test_generador_changelog_autocompletado_inactividad_sin_mutacion(self):
+        """Verifica que las tareas vencidas se clasifiquen como completadas por inactividad sin mutar el objeto."""
+        fecha_ref = datetime(2026, 8, 22, 10, 0)
+        t_vencida = Tarea(
+            id="10",
+            name="Reporte Vencido",
+            materia="Química",
+            status="to do",
+            due_date="20/08/2026",
+        )
+        hoy_map = {"10": t_vencida}
+        changelog = generar_texto_changelog({}, hoy_map, fecha_referencia=fecha_ref)
+        self.assertIn("• *Reporte Vencido* (Química) se completó por inactividad.", changelog)
+        self.assertEqual(t_vencida.status, "to do")
 
     def test_preparar_datos_imagen(self):
         """Verifica el filtrado y ordenamiento de tareas para el generador de imágenes."""
