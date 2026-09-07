@@ -15,6 +15,13 @@ from modulos.tarea import (
     auditar_cambios,
 )
 
+try:
+    from modulos import _changelog_nativo
+    MOTOR_NATIVO_DISPONIBLE: bool = True
+except ImportError:
+    _changelog_nativo = None  # type: ignore[assignment]
+    MOTOR_NATIVO_DISPONIBLE = False
+
 TareaEntrada = Union[Tarea, Mapping[str, Any]]
 MapaTareas = Mapping[str, TareaEntrada]
 
@@ -217,12 +224,12 @@ def construir_texto_final(
     return "\n".join(output)
 
 
-def generar_texto_changelog(
+def generar_texto_changelog_python(
     tareas_ayer: Optional[MapaTareas],
     tareas_hoy: Optional[MapaTareas],
     fecha_referencia: Optional[datetime] = None
 ) -> str:
-    """Orquesta la evaluación del estado de tareas entre ayer y hoy para generar el changelog.
+    """Genera el changelog utilizando la implementación pura en Python.
 
     Args:
         tareas_ayer: Mapeo de tareas del día de ayer indexadas por ID.
@@ -263,3 +270,75 @@ def generar_texto_changelog(
             actualizaciones.append(texto)
 
     return construir_texto_final(dia_semana, fecha_encabezado, completadas, nuevas, actualizaciones)
+
+
+def generar_texto_changelog_nativo(
+    tareas_ayer: Optional[MapaTareas],
+    tareas_hoy: Optional[MapaTareas],
+    fecha_referencia: Optional[datetime] = None
+) -> str:
+    """Genera el changelog utilizando la extensión acelerada nativa en C++.
+
+    Args:
+        tareas_ayer: Mapeo de tareas del día de ayer indexadas por ID.
+        tareas_hoy: Mapeo de tareas de hoy indexadas por ID.
+        fecha_referencia: Fecha/hora de referencia opcional para pruebas y determinismo.
+
+    Returns:
+        Changelog completo en formato Markdown.
+
+    Raises:
+        RuntimeError: Si el módulo compilado nativo no está disponible.
+    """
+    if not MOTOR_NATIVO_DISPONIBLE or _changelog_nativo is None:
+        raise RuntimeError("El motor nativo en C++ (_changelog_nativo) no está disponible en este entorno.")
+
+    hoy = fecha_referencia if fecha_referencia is not None else datetime.now()
+
+    # Preparamos los diccionarios para la interfaz C++
+    ayer_dict: Dict[str, Any] = {}
+    if tareas_ayer:
+        for tid, t in tareas_ayer.items():
+            ayer_dict[str(tid)] = t.a_diccionario() if isinstance(t, Tarea) else dict(t)
+
+    hoy_dict: Dict[str, Any] = {}
+    if tareas_hoy:
+        for tid, t in tareas_hoy.items():
+            hoy_dict[str(tid)] = t.a_diccionario() if isinstance(t, Tarea) else dict(t)
+
+    return _changelog_nativo.generar_texto_changelog_cpp(
+        ayer_dict,
+        hoy_dict,
+        hoy.year,
+        hoy.month,
+        hoy.day
+    )
+
+
+def generar_texto_changelog(
+    tareas_ayer: Optional[MapaTareas],
+    tareas_hoy: Optional[MapaTareas],
+    fecha_referencia: Optional[datetime] = None,
+    usar_nativo: bool = True
+) -> str:
+    """Orquesta la evaluación del estado de tareas entre ayer y hoy para generar el changelog.
+
+    Intenta utilizar el motor nativo en C++ si está disponible; de lo contrario,
+    recurre automáticamente a la implementación pura en Python.
+
+    Args:
+        tareas_ayer: Mapeo de tareas del día de ayer indexadas por ID.
+        tareas_hoy: Mapeo de tareas de hoy indexadas por ID.
+        fecha_referencia: Fecha/hora de referencia opcional para pruebas y determinismo.
+        usar_nativo: Booleano que indica si se debe preferir el motor nativo C++.
+
+    Returns:
+        Changelog completo en formato Markdown listo para su presentación o envío.
+    """
+    if usar_nativo and MOTOR_NATIVO_DISPONIBLE:
+        try:
+            return generar_texto_changelog_nativo(tareas_ayer, tareas_hoy, fecha_referencia)
+        except Exception:
+            pass  # Fallback seguro a Python ante cualquier excepción imprevista
+
+    return generar_texto_changelog_python(tareas_ayer, tareas_hoy, fecha_referencia)
