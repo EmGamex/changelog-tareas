@@ -41,6 +41,12 @@ No se pudo copiar al portapapeles: Pyperclip could not find a copy/paste mechani
   ```bash
   sudo apt-get install xclip
   ```
+- **En Android (Termux):** El programa detecta automáticamente el comando nativo `termux-clipboard-set`. Para habilitarlo:
+  1. Instale la app complementaria **Termux:API** en su teléfono (desde F-Droid).
+  2. En Termux, instale el paquete:
+     ```bash
+     pkg install termux-api
+     ```
 - **Nota:** Si la copia al portapapeles falla, el script no se interrumpe: el texto del changelog se imprimirá igualmente en la consola y se guardará el snapshot.
 
 ---

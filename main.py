@@ -6,6 +6,8 @@ en el portapapeles del sistema.
 """
 
 import os
+import shutil
+import subprocess
 import time
 import asyncio
 from typing import Optional
@@ -43,6 +45,41 @@ def _obtener_pie_mensaje(tiempo_calculo: float, autor: Optional[str] = None) -> 
     return f"\n`Mensaje automatizado en {tiempo_calculo:.2f} segundos`"
 
 
+def _copiar_al_portapapeles(texto: str) -> bool:
+    """Copia el texto al portapapeles del sistema.
+
+    Detecta automáticamente si el entorno cuenta con `termux-clipboard-set`
+    (propio de Termux en Android) para enviarlo al portapapeles nativo del teléfono.
+    En otros entornos (Windows, macOS, Linux de escritorio), utiliza `pyperclip`.
+
+    Args:
+        texto: Cadena de texto a copiar.
+
+    Returns:
+        True si la copia fue exitosa, False en caso contrario.
+    """
+    if shutil.which("termux-clipboard-set"):
+        try:
+            proceso = subprocess.run(
+                ["termux-clipboard-set"],
+                input=texto,
+                text=True,
+                check=True,
+                capture_output=True,
+            )
+            return True
+        except Exception:
+            pass
+
+    try:
+        pyperclip.copy(texto)
+        return True
+    except Exception as e:
+        print(f"\nNo se pudo copiar al portapapeles: {e}")
+        return False
+
+
+
 async def ejecutar_async() -> None:
     """Orquesta la sincronización asíncrona completa de tareas y changelog.
 
@@ -72,11 +109,8 @@ async def ejecutar_async() -> None:
     tiempo_calculo = time.time() - tiempo_inicio
     texto_final += _obtener_pie_mensaje(tiempo_calculo)
 
-    try:
-        pyperclip.copy(texto_final)
+    if _copiar_al_portapapeles(texto_final):
         print("\n¡Copiado al portapapeles con éxito!")
-    except Exception as e:
-        print(f"\nNo se pudo copiar al portapapeles: {e}")
 
     guardar_tareas_hoy(tareas_hoy)
 
